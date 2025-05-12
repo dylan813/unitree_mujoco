@@ -7,7 +7,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/unitree_robotics/lib/cmake")
-find_package(mujoco REQUIRED)
+# find_package(mujoco REQUIRED)
+include_directories("$ENV{HOME}/unitree_ws/mujoco/mujoco-3.2.7/include")
+link_directories("$ENV{HOME}/unitree_ws/mujoco/mujoco-3.2.7/lib")
 find_package(unitree_sdk2 REQUIRED)
 
 
@@ -18,7 +20,7 @@ file(GLOB SIM_SRC
 
 set(SIM_DEPENDENCIES
     pthread
-    mujoco::mujoco
+    mujoco
     glfw
     yaml-cpp
     unitree_sdk2)

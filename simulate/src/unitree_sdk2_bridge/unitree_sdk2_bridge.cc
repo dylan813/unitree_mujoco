@@ -208,11 +208,35 @@ void UnitreeSdk2Bridge::PublishWirelessController()
     }
 }
 
-void UnitreeSdk2Bridge::Run()
-{
-    while (1)
-    {
-        sleep(2);
+void UnitreeSdk2Bridge::Run() {
+    const double gain = 5.0;  // Increase if movement is too small
+
+    while (true) {
+        if (!mj_data_ || !js_) {
+            usleep(10000);
+            continue;
+        }
+
+        js_->getState();  // read the joystick
+
+        // Normalize joystick input [-1.0, 1.0]
+        double lx = double(js_->axis_[js_id_.axis["LX"]]) / max_value_;
+        double ly = double(js_->axis_[js_id_.axis["LY"]]) / max_value_;
+        double rx = double(js_->axis_[js_id_.axis["RX"]]) / max_value_;
+        double ry = double(js_->axis_[js_id_.axis["RY"]]) / max_value_;
+
+        // Example: map left stick Y to forward/reverse drive (wheels)
+        // Adjust these indices based on your XML actuator order
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_wheel")] = gain * ly;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_wheel")] = gain * ly;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_wheel")] = gain * ly;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_wheel")] = gain * ly;
+
+        // Example: use right stick X to steer front wheels (hip joints)
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_hip")] = gain * rx;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_hip")] = gain * rx;
+
+        usleep(10000);  // 10 ms loop
     }
 }
 
