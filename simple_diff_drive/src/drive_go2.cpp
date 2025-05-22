@@ -59,7 +59,7 @@ private:
             }
 
             const double max_wheel_speed = 15.0; // rad/s
-            const double turning_sensitivity = 10.0;
+            const double turning_sensitivity = 1.0;
 
             double forward_speed = joystick_ly_ * max_wheel_speed;
             double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
