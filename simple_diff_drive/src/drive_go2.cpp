@@ -46,7 +46,6 @@ private:
         }
         else
         {
-            // Then stand down
             phase = tanh((runing_time - 3.0) / 1.2);
             for (int i = 0; i < 12; i++)
             {
@@ -55,6 +54,20 @@ private:
                 low_cmd.motor_cmd[i].kp = 50;
                 low_cmd.motor_cmd[i].kd = 3.5;
                 low_cmd.motor_cmd[i].tau = 0;
+            }
+
+            const double max_wheel_speed = 5.0;
+            double target_wheel_velocity = joystick_ly_ * max_wheel_speed;
+
+            const int wheel_motor_indices[] = {12, 13, 14, 15};
+            for (int wheel_idx : wheel_motor_indices)
+            {
+                low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
+                low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target (special value for velocity control)
+                low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
+                low_cmd.motor_cmd[wheel_idx].dq = target_wheel_velocity;
+                low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping (tunable)
+                low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // No direct torque command
             }
         }
 
@@ -65,7 +78,8 @@ private:
     void wireless_controller_callback(const unitree_go::msg::WirelessController::SharedPtr msg)
     {
         joystick_ly_ = msg->ly; 
-        RCLCPP_INFO(this->get_logger(), "Received joystick: LY = %f", joystick_ly_);
+        joystick_rx_ = msg->rx;
+        RCLCPP_INFO(this->get_logger(), "LY = %f, RX = %f", joystick_ly_, joystick_rx_);
     }
 
     void init_cmd()
@@ -88,6 +102,7 @@ private:
 
     unitree_go::msg::LowCmd low_cmd;
     double joystick_ly_ = 0.0;
+    double joystick_rx_ = 0.0;
     
     double stand_up_joint_pos[12] = {0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763,
                                      0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763};
