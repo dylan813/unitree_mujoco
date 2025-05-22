@@ -79,8 +79,8 @@ private:
             {
                 low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
                 low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
                 low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-                low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed; // Apply calculated right wheel speed
                 low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
                 low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
             }
@@ -89,8 +89,8 @@ private:
             {
                 low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
                 low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
                 low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-                low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed; // Apply calculated left wheel speed
                 low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
                 low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
             }
