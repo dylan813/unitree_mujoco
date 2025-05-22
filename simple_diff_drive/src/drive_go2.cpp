@@ -70,8 +70,8 @@ private:
             right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
             left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
 
-            // Right wheels: 12 (FR), 14 (BR)
-            // Left wheels:  13 (FL), 15 (BL)
+            // Right wheels: 12 (FR_wheel), 14 (RR_wheel)
+            // Left wheels:  13 (FL_wheel), 15 (RL_wheel)
             const int right_wheel_motor_indices[] = {12, 14};
             const int left_wheel_motor_indices[] = {13, 15};
 
