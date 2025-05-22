@@ -1,1 +1,1 @@
-# unitree_mujoco
+# Mujoco Simulation for Unitree Robots
