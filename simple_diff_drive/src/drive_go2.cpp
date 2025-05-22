@@ -1,13 +1,9 @@
-/**
- * This example demonstrates how to use ROS2 to send low-level motor commands of unitree go2 robot
- **/
 #include "rclcpp/rclcpp.hpp"
 #include "unitree_go/msg/low_cmd.hpp"
 #include "unitree_go/msg/motor_cmd.hpp"
 #include "unitree_go/msg/bms_cmd.hpp"
 #include "motor_crc.h"
 #include "unitree_go/msg/wireless_controller.hpp"
-
 // Create a low_level_cmd_sender class for low state receive
 class low_level_cmd_sender : public rclcpp::Node
 {
@@ -26,15 +22,12 @@ public:
         // Subscribe to joystick controller
         wireless_controller_sub_ = this->create_subscription<unitree_go::msg::WirelessController>(
             "/wirelesscontroller", 10, std::bind(&low_level_cmd_sender::wireless_controller_callback, this, std::placeholders::_1));
-        RCLCPP_INFO(this->get_logger(), "Subscribed to /wirelesscontroller for joystick input.");
+        RCLCPP_INFO(this->get_logger(), "Subscribed to /wirelesscontroller for joystick input.");        
     }
 
 private:
-    void wireless_controller_callback(const unitree_go::msg::WirelessController::SharedPtr msg)
+    void timer_callback()
     {
-        joystick_ly_ = msg->ly;
-        RCLCPP_INFO(this->get_logger(), "Received joystick: LY = %f", msg->ly);
-
         runing_time += dt;
         if (runing_time < 3.0)
         {
@@ -69,6 +62,12 @@ private:
         cmd_puber->publish(low_cmd); // Publish lowcmd message
     }
 
+    void wireless_controller_callback(const unitree_go::msg::WirelessController::SharedPtr msg)
+    {
+        joystick_ly_ = msg->ly; 
+        RCLCPP_INFO(this->get_logger(), "Received joystick: LY = %f", joystick_ly_);
+    }
+
     void init_cmd()
     {
 
@@ -89,7 +88,7 @@ private:
 
     unitree_go::msg::LowCmd low_cmd;
     double joystick_ly_ = 0.0;
-
+    
     double stand_up_joint_pos[12] = {0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763,
                                      0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763};
     double stand_down_joint_pos[12] = {0.0473455, 1.22187, -2.44375, -0.0473455, 1.22187, -2.44375, 0.0473455,
