@@ -209,34 +209,36 @@ void UnitreeSdk2Bridge::PublishWirelessController()
 }
 
 void UnitreeSdk2Bridge::Run() {
-    const double gain = 5.0;  // Increase if movement is too small
-
     while (true) {
         if (!mj_data_ || !js_) {
             usleep(10000);
             continue;
         }
 
-        js_->getState();  // read the joystick
+        js_->getState();
 
-        // Normalize joystick input [-1.0, 1.0]
         double lx = double(js_->axis_[js_id_.axis["LX"]]) / max_value_;
         double ly = double(js_->axis_[js_id_.axis["LY"]]) / max_value_;
-        double rx = double(js_->axis_[js_id_.axis["RX"]]) / max_value_;
-        double ry = double(js_->axis_[js_id_.axis["RY"]]) / max_value_;
 
-        // Example: map left stick Y to forward/reverse drive (wheels)
-        // Adjust these indices based on your XML actuator order
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_wheel")] = gain * ly;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_wheel")] = gain * ly;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_wheel")] = gain * ly;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_wheel")] = gain * ly;
+        double base_speed = -ly * 25;
+        double turn_adjust = lx * 60;
 
-        // Example: use right stick X to steer front wheels (hip joints)
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_hip")] = gain * rx;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_hip")] = gain * rx;
+        double left_speed = base_speed + turn_adjust;
+        double right_speed = base_speed - turn_adjust;
+        left_speed = std::clamp(left_speed, -50.0, 50.0);
+        right_speed = std::clamp(right_speed, -50.0, 50.0);
 
-        usleep(10000);  // 10 ms loop
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_wheel")] = left_speed;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_wheel")] = left_speed;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_wheel")] = right_speed;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_wheel")] = right_speed;
+
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_hip")] = 50 * lx;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_hip")] = 50 * lx;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_hip")] = 50 * lx;
+        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_hip")] = 50 * lx;
+
+        usleep(10000);
     }
 }
 
