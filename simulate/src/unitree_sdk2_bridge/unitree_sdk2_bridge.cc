@@ -208,37 +208,11 @@ void UnitreeSdk2Bridge::PublishWirelessController()
     }
 }
 
-void UnitreeSdk2Bridge::Run() {
-    while (true) {
-        if (!mj_data_ || !js_) {
-            usleep(10000);
-            continue;
-        }
-
-        js_->getState();
-
-        double lx = double(js_->axis_[js_id_.axis["LX"]]) / max_value_;
-        double ly = double(js_->axis_[js_id_.axis["LY"]]) / max_value_;
-
-        double base_speed = -ly * 25;
-        double turn_adjust = lx * 60;
-
-        double left_speed = base_speed + turn_adjust;
-        double right_speed = base_speed - turn_adjust;
-        left_speed = std::clamp(left_speed, -50.0, 50.0);
-        right_speed = std::clamp(right_speed, -50.0, 50.0);
-
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_wheel")] = left_speed;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_wheel")] = left_speed;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_wheel")] = right_speed;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_wheel")] = right_speed;
-
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FR_hip")] = 50 * lx;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "FL_hip")] = 50 * lx;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RR_hip")] = 50 * lx;
-        mj_data_->ctrl[mj_name2id(mj_model_, mjOBJ_ACTUATOR, "RL_hip")] = 50 * lx;
-
-        usleep(10000);
+void UnitreeSdk2Bridge::Run()
+{
+    while (1)
+    {
+        sleep(2);
     }
 }
 
