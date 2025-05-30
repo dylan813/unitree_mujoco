@@ -31,11 +31,10 @@ private:
     void timer_callback()
     {
         runing_time += dt;
-        if (runing_time < 3.0)
+        
+        if (stand_up)
         {
-            // Stand up in first 3 second
-
-            // Total time for standing up or standing down is about 1.2s
+            // Stand up
             phase = tanh(runing_time / 1.2);
             for (int i = 0; i < 12; i++)
             {
@@ -48,7 +47,8 @@ private:
         }
         else
         {
-            phase = tanh((runing_time - 3.0) / 1.2);
+            // Stand down
+            phase = tanh(runing_time / 1.2);
             for (int i = 0; i < 12; i++)
             {
                 low_cmd.motor_cmd[i].q = phase * stand_down_joint_pos[i] + (1 - phase) * stand_up_joint_pos[i];
@@ -57,43 +57,43 @@ private:
                 low_cmd.motor_cmd[i].kd = 3.5;
                 low_cmd.motor_cmd[i].tau = 0;
             }
+        }
 
-            const double max_wheel_speed = 15.0; // rad/s
-            const double turning_sensitivity = 1.0;
+        const double max_wheel_speed = 15.0; // rad/s
+        const double turning_sensitivity = 1.0;
 
-            double forward_speed = joystick_ly_ * max_wheel_speed;
-            double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
+        double forward_speed = joystick_ly_ * max_wheel_speed;
+        double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
 
-            double right_wheel_speed = forward_speed - turning_speed;
-            double left_wheel_speed = forward_speed + turning_speed;
+        double right_wheel_speed = forward_speed - turning_speed;
+        double left_wheel_speed = forward_speed + turning_speed;
 
-            right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
-            left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
+        right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
+        left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
 
-            // Right wheels: 12 (FR_wheel), 14 (RR_wheel)
-            // Left wheels:  13 (FL_wheel), 15 (RL_wheel)
-            const int right_wheel_motor_indices[] = {12, 14};
-            const int left_wheel_motor_indices[] = {13, 15};
+        // Right wheels: 12 (FR_wheel), 14 (RR_wheel)
+        // Left wheels:  13 (FL_wheel), 15 (RL_wheel)
+        const int right_wheel_motor_indices[] = {12, 14};
+        const int left_wheel_motor_indices[] = {13, 15};
 
-            for (int wheel_idx : right_wheel_motor_indices)
-            {
-                low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-                low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
-                low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-                low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-                low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
-                low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
-            }
+        for (int wheel_idx : right_wheel_motor_indices)
+        {
+            low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
+            low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+            low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
+            low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
+            low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
+            low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
+        }
 
-            for (int wheel_idx : left_wheel_motor_indices)
-            {
-                low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-                low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
-                low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
-                low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-                low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
-                low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
-            }
+        for (int wheel_idx : left_wheel_motor_indices)
+        {
+            low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
+            low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+            low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
+            low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
+            low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
+            low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
         }
 
         get_crc(low_cmd);            // Check motor cmd crc
@@ -104,7 +104,15 @@ private:
     {
         joystick_ly_ = msg->ly; 
         joystick_rx_ = msg->rx;
-        RCLCPP_INFO(this->get_logger(), "LY = %f, RX = %f", joystick_ly_, joystick_rx_);
+        
+        if (msg->keys & (1 << 8)) {
+            stand_up = true;
+        }
+        if (msg->keys & (1 << 9)) {
+            stand_up = false;
+        }
+        
+        RCLCPP_INFO(this->get_logger(), "LY = %f, RX = %f, A = %d, B = %d", joystick_ly_, joystick_rx_, (msg->keys & (1 << 8)) != 0, (msg->keys & (1 << 9)) != 0);
     }
 
     void init_cmd()
@@ -136,6 +144,8 @@ private:
     double dt = 0.002;
     double runing_time = 0.0;
     double phase = 0.0;
+
+    bool stand_up = false;
 };
 
 int main(int argc, char **argv)
