@@ -68,6 +68,15 @@ private:
                     current_state = RobotState::TRANSITION_DOWN;
                     runing_time = 0.0;
                 } else {
+
+                    for (int i = 0; i < 12; i++) {
+                        low_cmd.motor_cmd[i].q = stand_up_joint_pos[i];
+                        low_cmd.motor_cmd[i].dq = 0;
+                        low_cmd.motor_cmd[i].kp = 50;
+                        low_cmd.motor_cmd[i].kd = 10;
+                        low_cmd.motor_cmd[i].tau = 0;
+                    }
+
                     const double max_wheel_speed = 15.0; // rad/s
                     const double turning_sensitivity = 1.0;
 
@@ -85,12 +94,12 @@ private:
 
                     for (int wheel_idx : right_wheel_motor_indices)
                     {
-                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;               // active mode
-                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;              // position target
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;
                         low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-                        low_cmd.motor_cmd[wheel_idx].kp = 0;                    // velocity control (p gain)
-                        low_cmd.motor_cmd[wheel_idx].kd = 3;                    // velocity damping (d gain)
-                        low_cmd.motor_cmd[wheel_idx].tau = 0;                   // torque
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;
+                        low_cmd.motor_cmd[wheel_idx].kd = 3;
+                        low_cmd.motor_cmd[wheel_idx].tau = 0;
                     }
 
                     for (int wheel_idx : left_wheel_motor_indices)
