@@ -28,72 +28,98 @@ public:
     }
 
 private:
+    enum class RobotState {
+        STAND_DOWN,
+        TRANSITION_UP,
+        STAND_UP,
+        TRANSITION_DOWN
+    };
+
+    RobotState current_state = RobotState::STAND_DOWN;
+
     void timer_callback()
     {
-        runing_time += dt;
-        
-        if (stand_up)
-        {
-            // Stand up
-            phase = tanh(runing_time / 1.2);
-            for (int i = 0; i < 12; i++)
-            {
-                low_cmd.motor_cmd[i].q = phase * stand_up_joint_pos[i] + (1 - phase) * stand_down_joint_pos[i];
-                low_cmd.motor_cmd[i].dq = 0;
-                low_cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0;
-                low_cmd.motor_cmd[i].kd = 3.5;
-                low_cmd.motor_cmd[i].tau = 0;
-            }
-        }
-        else
-        {
-            // Stand down
-            phase = tanh(runing_time / 1.2);
-            for (int i = 0; i < 12; i++)
-            {
-                low_cmd.motor_cmd[i].q = phase * stand_down_joint_pos[i] + (1 - phase) * stand_up_joint_pos[i];
-                low_cmd.motor_cmd[i].dq = 0;
-                low_cmd.motor_cmd[i].kp = 50;
-                low_cmd.motor_cmd[i].kd = 3.5;
-                low_cmd.motor_cmd[i].tau = 0;
-            }
-        }
+        switch (current_state) {
+            case RobotState::STAND_DOWN:
+                if (stand_up) {
+                    current_state = RobotState::TRANSITION_UP;
+                    runing_time = 0.0;
+                }
+                break;
 
-        const double max_wheel_speed = 15.0; // rad/s
-        const double turning_sensitivity = 1.0;
+            case RobotState::TRANSITION_UP:
+                if (runing_time < 1.2) {
+                    runing_time += dt;
+                    phase = runing_time / 1.2;
+                    for (int i = 0; i < 12; i++) {
+                        low_cmd.motor_cmd[i].q = phase * stand_up_joint_pos[i] + (1 - phase) * stand_down_joint_pos[i];
+                        low_cmd.motor_cmd[i].dq = 0;
+                        low_cmd.motor_cmd[i].kp = phase * 50 + (1 - phase) * 20;
+                        low_cmd.motor_cmd[i].kd = 3.5;
+                        low_cmd.motor_cmd[i].tau = 0;
+                    }
+                } else {
+                    current_state = RobotState::STAND_UP;
+                }
+                break;
 
-        double forward_speed = joystick_ly_ * max_wheel_speed;
-        double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
+            case RobotState::STAND_UP:
+                if (!stand_up) {
+                    current_state = RobotState::TRANSITION_DOWN;
+                    runing_time = 0.0;
+                } else {
+                    const double max_wheel_speed = 15.0; // rad/s
+                    const double turning_sensitivity = 1.0;
 
-        double right_wheel_speed = forward_speed - turning_speed;
-        double left_wheel_speed = forward_speed + turning_speed;
+                    double forward_speed = joystick_ly_ * max_wheel_speed;
+                    double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
 
-        right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
-        left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
+                    double right_wheel_speed = forward_speed - turning_speed;
+                    double left_wheel_speed = forward_speed + turning_speed;
 
-        // Right wheels: 12 (FR_wheel), 14 (RR_wheel)
-        // Left wheels:  13 (FL_wheel), 15 (RL_wheel)
-        const int right_wheel_motor_indices[] = {12, 14};
-        const int left_wheel_motor_indices[] = {13, 15};
+                    right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
+                    left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
 
-        for (int wheel_idx : right_wheel_motor_indices)
-        {
-            low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-            low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
-            low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-            low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-            low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
-            low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
-        }
+                    const int right_wheel_motor_indices[] = {12, 14};
+                    const int left_wheel_motor_indices[] = {13, 15};
 
-        for (int wheel_idx : left_wheel_motor_indices)
-        {
-            low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-            low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
-            low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
-            low_cmd.motor_cmd[wheel_idx].kp = 0.0;     // No P-gain for velocity control
-            low_cmd.motor_cmd[wheel_idx].kd = 3.0;     // D-gain for velocity damping
-            low_cmd.motor_cmd[wheel_idx].tau = 0.0;    // Torque command
+                    for (int wheel_idx : right_wheel_motor_indices)
+                    {
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                        low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;     // No P-gain for velocity control
+                        low_cmd.motor_cmd[wheel_idx].kd = 3;     // D-gain for velocity damping
+                        low_cmd.motor_cmd[wheel_idx].tau = 0;    // Torque command
+                    }
+
+                    for (int wheel_idx : left_wheel_motor_indices)
+                    {
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                        low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;     // No P-gain for velocity control
+                        low_cmd.motor_cmd[wheel_idx].kd = 3;     // D-gain for velocity damping
+                        low_cmd.motor_cmd[wheel_idx].tau = 0;    // Torque command
+                    }
+                }
+                break;
+
+            case RobotState::TRANSITION_DOWN:
+                if (runing_time < 2.4) {
+                    runing_time += dt;
+                    phase = runing_time / 2.4;
+                    for (int i = 0; i < 12; i++) {
+                        low_cmd.motor_cmd[i].q = (1 - phase) * stand_up_joint_pos[i] + phase * stand_down_joint_pos[i];
+                        low_cmd.motor_cmd[i].dq = 0;
+                        low_cmd.motor_cmd[i].kp = (1 - phase) * 50 + phase * 20;
+                        low_cmd.motor_cmd[i].kd = 3.5;
+                        low_cmd.motor_cmd[i].tau = 0;
+                    }
+                } else {
+                    current_state = RobotState::STAND_DOWN;
+                }
+                break;
         }
 
         get_crc(low_cmd);            // Check motor cmd crc
@@ -137,15 +163,19 @@ private:
     double joystick_ly_ = 0.0;
     double joystick_rx_ = 0.0;
     
-    double stand_up_joint_pos[12] = {0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763,
-                                     0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763};
-    double stand_down_joint_pos[12] = {0.0473455, 1.22187, -2.44375, -0.0473455, 1.22187, -2.44375, 0.0473455,
-                                       1.22187, -2.44375, -0.0473455, 1.22187, -2.44375};
+    // positions for go2 (no wheels)
+    // double stand_up_joint_pos[12] = {0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763,
+    //                                  0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763};
+    // double stand_down_joint_pos[12] = {0.0473455, 1.22187, -2.44375, -0.0473455, 1.22187, -2.44375, 0.0473455,
+    //                                    1.22187, -2.44375, -0.0473455, 1.22187, -2.44375};
+    double stand_up_joint_pos[12] = {-0.00571868, 0.7, -1.21763, 0.00571868, 0.7, -1.21763,
+                                     -0.00571868, 0.7, -1.21763, 0.00571868, 0.7, -1.21763};
+    double stand_down_joint_pos[12] = {-0.0473455, 0.9, -2.44375, 0.0473455, 0.9, -2.44375,
+                                       -0.0473455, 0.9, -2.44375, 0.0473455, 0.9, -2.44375};
+    bool stand_up = false;
     double dt = 0.002;
     double runing_time = 0.0;
     double phase = 0.0;
-
-    bool stand_up = false;
 };
 
 int main(int argc, char **argv)
