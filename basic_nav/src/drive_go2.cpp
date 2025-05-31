@@ -85,22 +85,22 @@ private:
 
                     for (int wheel_idx : right_wheel_motor_indices)
                     {
-                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-                        low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;               // active mode
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;              // position target
                         low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-                        low_cmd.motor_cmd[wheel_idx].kp = 0;     // No P-gain for velocity control
-                        low_cmd.motor_cmd[wheel_idx].kd = 3;     // D-gain for velocity damping
-                        low_cmd.motor_cmd[wheel_idx].tau = 0;    // Torque command
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;                    // velocity control (p gain)
+                        low_cmd.motor_cmd[wheel_idx].kd = 3;                    // velocity damping (d gain)
+                        low_cmd.motor_cmd[wheel_idx].tau = 0;                   // torque
                     }
 
                     for (int wheel_idx : left_wheel_motor_indices)
                     {
-                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;    // Active mode
-                        low_cmd.motor_cmd[wheel_idx].q = PosStopF; // Position target
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;
                         low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
-                        low_cmd.motor_cmd[wheel_idx].kp = 0;     // No P-gain for velocity control
-                        low_cmd.motor_cmd[wheel_idx].kd = 3;     // D-gain for velocity damping
-                        low_cmd.motor_cmd[wheel_idx].tau = 0;    // Torque command
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;
+                        low_cmd.motor_cmd[wheel_idx].kd = 3;
+                        low_cmd.motor_cmd[wheel_idx].tau = 0;
                     }
                 }
                 break;
