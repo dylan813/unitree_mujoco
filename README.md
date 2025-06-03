@@ -12,7 +12,7 @@ export ROS_DOMAIN_ID=1
 ./install/drive_go2/bin/drive_go2
 ```
 
-code in ~/unitree_ws/unitree_ros2/setup_local.sh
+setup in ~/unitree_ws/unitree_ros2/setup_local.sh
 ```bash
 #!/bin/bash
 echo "Setup unitree ros2 simulation environment"
