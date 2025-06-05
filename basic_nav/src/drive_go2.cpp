@@ -77,7 +77,7 @@ private:
                     runing_time = 0.0;
                 } else {
                     float kp = 50.0;
-                    float ki = 2.0;
+                    float ki = 0.0;
                     float kd = 5.0;
 
                     for (int i = 0; i < 12; i++) {
