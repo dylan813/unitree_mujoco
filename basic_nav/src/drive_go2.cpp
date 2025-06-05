@@ -77,7 +77,7 @@ private:
                     runing_time = 0.0;
                 } else {
                     float kp = 50.0;
-                    float ki = 5.0;
+                    float ki = 2.0;
                     float kd = 5.0;
 
                     for (int i = 0; i < 12; i++) {
@@ -100,9 +100,8 @@ private:
                     }
 
                     const double max_wheel_speed = 15.0; // rad/s
-                    const double turning_sensitivity = 0.8;
                     double forward_speed = joystick_ly_ * max_wheel_speed;
-                    double turning_speed = joystick_rx_ * max_wheel_speed * turning_sensitivity;
+                    double turning_speed = joystick_rx_ * max_wheel_speed;
                     double right_wheel_speed = forward_speed - turning_speed;
                     double left_wheel_speed = forward_speed + turning_speed;
                     right_wheel_speed = std::clamp(right_wheel_speed, -max_wheel_speed, max_wheel_speed);
