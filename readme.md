@@ -35,8 +35,12 @@ Note:
 # Installation
 ## C++ Simulator (simulate)
 ### 1. Dependencies
+#### make workspace and install following dependencies within it
+```bash
+mkdir -p ~/unitree_ws
+```
+
 #### unitree_sdk2
-It is recommended to install `unitree_sdk2` in `/opt/unitree_robotics` path.
 ```bash
 git clone https://github.com/unitreerobotics/unitree_sdk2.git
 cd unitree_sdk2/
@@ -46,23 +50,31 @@ cmake .. -DCMAKE_INSTALL_PREFIX=/opt/unitree_robotics
 sudo make install
 ```
 For more details, see: https://github.com/unitreerobotics/unitree_sdk2
+
 #### mujoco
 Current version is tested in mujoco-3.2.7
 ```bash
 sudo apt install libglfw3-dev libxinerama-dev libxcursor-dev libxi-dev
 ```
+
+Install mujoco: https://mujoco.org/
+Download: mujoco-3.2.7-linux-x86_64.tar.gz
 ```bash
-git clone https://github.com/google-deepmind/mujoco.git
-mkdir build && cd build
-cmake ..
-make -j4
-sudo make install
+tar -xvzf ~/Downloads/mujoco-3.2.7-linux-x86_64.tar.gz -C ~/unitree_ws
 ```
+
+run these or add to /.bashrc for convenience
+```bash
+export MUJOCO_PY_MUJOCO_PATH=$HOME/unitree_ws/mujoco-3.2.7
+export LD_LIBRARY_PATH=$HOME/unitree_ws/mujoco-3.2.7/bin:$LD_LIBRARY_PATH
+```
+
 Test:
 ```bash
-simulate
+$MUJOCO_PY_MUJOCO_PATH/bin/simulate
 ```
 If the mujoco simulator pops up, the installation is successful.
+
 #### yaml-cpp
 yaml-cpp is mainly used for reading configuration files:
 ```bash

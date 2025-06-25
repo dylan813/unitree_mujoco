@@ -1,5 +1,7 @@
 # unitree mujoco sim
 
+refer to readme.md for installation
+
 ```bash
 source ~/unitree_ws/unitree_ros2/setup_local.sh
 ```
