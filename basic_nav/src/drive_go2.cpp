@@ -76,9 +76,20 @@ private:
                     current_state = RobotState::TRANSITION_DOWN;
                     runing_time = 0.0;
                 } else {
-                    float kp = 50.0;
-                    float ki = 0.0;
-                    float kd = 5.0;
+                    //gains for hip motors (0, 3, 6, 9)
+                    float kp_hip = 80.0;
+                    float ki_hip = 0.0;
+                    float kd_hip = 12.0;
+                    
+                    //gains for thigh motors (1, 4, 7, 10)
+                    float kp_thigh = 70.0;
+                    float ki_thigh = 0.0;
+                    float kd_thigh = 8.0;
+                    
+                    //gains for calf motors (2, 5, 8, 11)
+                    float kp_calf = 45.0;
+                    float ki_calf = 0.0;
+                    float kd_calf = 4.0;
 
                     for (int i = 0; i < 12; i++) {
                         float desired_q = stand_up_joint_pos[i];
@@ -87,6 +98,22 @@ private:
                         float d_error = (error - prev_error[i]) / dt;
 
                         integral_error[i] += error * dt;
+                        
+                        float kp, ki, kd;
+                        if (i == 0 || i == 3 || i == 6 || i == 9) {
+                            kp = kp_hip;
+                            ki = ki_hip;
+                            kd = kd_hip;
+                        } else if (i == 1 || i == 4 || i == 7 || i == 10) {
+                            kp = kp_thigh;
+                            ki = ki_thigh;
+                            kd = kd_thigh;
+                        } else {
+                            kp = kp_calf;
+                            ki = ki_calf;
+                            kd = kd_calf;
+                        }
+                        
                         float tau = kp * error + ki * integral_error[i] + kd * d_error;
 
                         low_cmd.motor_cmd[i].mode = 0x01;
@@ -191,10 +218,10 @@ private:
     //                                  0.00571868, 0.608813, -1.21763, -0.00571868, 0.608813, -1.21763};
     // double stand_down_joint_pos[12] = {0.0473455, 1.22187, -2.44375, -0.0473455, 1.22187, -2.44375, 0.0473455,
     //                                    1.22187, -2.44375, -0.0473455, 1.22187, -2.44375};
-    double stand_up_joint_pos[12] = {-0.00571868, 0.5, -1.21763, 0.00571868, 0.5, -1.21763,
-                                     -0.00571868, 0.9, -1.21763, 0.00571868, 0.9, -1.21763};
-    double stand_down_joint_pos[12] = {-0.0473455, 0.9, -2.44375, 0.0473455, 0.9, -2.44375,
-                                       -0.0473455, 0.9, -2.44375, 0.0473455, 0.9, -2.44375};
+    double stand_up_joint_pos[12] = {0.01, 0.5, -1.21763, -0.01, 0.5, -1.21763,
+                                     0.01, 0.9, -1.21763, -0.01, 0.9, -1.21763};
+    double stand_down_joint_pos[12] = {0.01, 0.9, -2.44375, -0.01, 0.9, -2.44375,
+                                       0.01, 0.9, -2.44375, -0.01, 0.9, -2.44375};
     bool stand_up = false;
     double dt = 0.002;
     double runing_time = 0.0;
