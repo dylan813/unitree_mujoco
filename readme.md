@@ -42,6 +42,7 @@ mkdir -p ~/unitree_ws
 
 #### unitree_sdk2
 ```bash
+cd ~/unitree_ws
 git clone https://github.com/unitreerobotics/unitree_sdk2.git
 cd unitree_sdk2/
 mkdir build
