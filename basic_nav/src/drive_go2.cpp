@@ -113,8 +113,8 @@ private:
                     double turning_speed = joystick_rx_ * max_wheel_speed;
                     double right_wheel_speed = forward_speed - turning_speed;
                     double left_wheel_speed = forward_speed + turning_speed;
-                    right_wheel_speed = std::clamp(right_wheel_speed, -max_wheel_speed, max_wheel_speed);
-                    left_wheel_speed = std::clamp(left_wheel_speed, -max_wheel_speed, max_wheel_speed);
+                    right_wheel_speed = std::max(-max_wheel_speed, std::min(right_wheel_speed, max_wheel_speed));
+                    left_wheel_speed = std::max(-max_wheel_speed, std::min(left_wheel_speed, max_wheel_speed));
 
                     const int right_wheel_motor_indices[] = {12, 14};
                     const int left_wheel_motor_indices[] = {13, 15};
