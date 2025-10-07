@@ -17,7 +17,7 @@ public:
         NONE,        // No posture change
         STAND_UP,    // Stand up
         CROUCH,      // Crouch down
-        STAND_DOWN   // Stand down (lay down)
+        STAND_DOWN   // Stand down
     };
     
     struct Command {
@@ -40,15 +40,13 @@ public:
         lowstate_sub_ = this->create_subscription<unitree_go::msg::LowState>(
             "/lowstate", 10, std::bind(&low_level_cmd_sender::lowstate_callback, this, std::placeholders::_1));
 
-        // Initialize command sequence
+        // Command sequence (instead of sending joystick commands)
         initialize_command_sequence();
         
-        // Start the command sequence
         start_time_ = std::chrono::high_resolution_clock::now();
         current_command_index_ = 0;
         command_start_time_ = std::chrono::high_resolution_clock::now();
 
-        // Apply the first command immediately
         if (!command_sequence_.empty()) {
             const Command& first_cmd = command_sequence_[0];
             apply_posture_command(first_cmd.posture_cmd);
@@ -89,12 +87,11 @@ private:
                         current_state = RobotState::TRANSITION_TO_CROUCH;
                         transitioning_to_crouch_from_stand_down = false;
                     } else {
-                        // From STAND_DOWN to CROUCH: direct transition
                         current_state = RobotState::TRANSITION_TO_CROUCH;
                         transitioning_to_crouch_from_stand_down = true;
                     }
                     runing_time = 0.0;
-                    stand_up = true; // Set stand_up to true for crouch state
+                    stand_up = true;
                     RCLCPP_INFO(this->get_logger(), "Command: Crouch");
                 }
                 break;
@@ -108,7 +105,6 @@ private:
                 }
                 break;
             case PostureCmd::NONE:
-                // No posture change
                 break;
         }
     }
@@ -140,7 +136,6 @@ private:
 
         switch (current_state) {
             case RobotState::STAND_DOWN:
-                // Wait for command to stand up
                 break;
 
             case RobotState::TRANSITION_UP:
@@ -238,21 +233,18 @@ private:
                 double transition_time = transitioning_to_crouch_from_stand_down ? 4.0 : 2.5;
                 if (runing_time < transition_time) {
                     runing_time += dt;
-                    // Use smooth easing function to prevent springing at the end
                     double raw_phase = runing_time / transition_time;
                     double phase = raw_phase * raw_phase * (3.0 - 2.0 * raw_phase); // Smooth step function
                     
                     for (int i = 0; i < 12; i++) {
-                        // Choose starting position based on where we're transitioning from
                         double* start_pos = transitioning_to_crouch_from_stand_down ? stand_down_joint_pos : stand_up_joint_pos;
-                        double start_kp = transitioning_to_crouch_from_stand_down ? 12.0 : 35.0; // Even lower starting gains
+                        double start_kp = transitioning_to_crouch_from_stand_down ? 12.0 : 35.0;
                         
                         low_cmd.motor_cmd[i].q = (1 - phase) * start_pos[i] + phase * crouch_joint_pos[i];
                         low_cmd.motor_cmd[i].dq = 0;
-                        // Very gradual gain transition that ends with lower gains to prevent jump
                         double end_kp = transitioning_to_crouch_from_stand_down ? 18.0 : 30.0;
                         low_cmd.motor_cmd[i].kp = (1 - phase) * start_kp + phase * end_kp;
-                        low_cmd.motor_cmd[i].kd = 2.5; // Even lower damping for smoother motion
+                        low_cmd.motor_cmd[i].kd = 2.5;
                         low_cmd.motor_cmd[i].tau = 0;
                     }
                 } else {
@@ -364,39 +356,28 @@ private:
         
         command_sequence_.clear();
         
-        // Custom sequence as requested:
+        // Custom army crawl sequence
         command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::CROUCH, 6.0, "Crouch down very slowly and safely"));
-        command_sequence_.push_back(Command(0.4, 0.0, PostureCmd::NONE, 2.0, "Move forward while crouching"));
+        command_sequence_.push_back(Command(0.4, 0.0, PostureCmd::NONE, 1.5, "Move forward while crouching"));
         
-        // Initial turn to set direction for snake pattern
-        command_sequence_.push_back(Command(0.5, -1.0, PostureCmd::NONE, 0.5, "Initial turn for snake direction"));
-        
-        // Configurable alternating turns - change this number to set how many times it turns back and forth
-        const int num_turn_cycles = 20; // This means 4 right turns and 4 left turns (8 total turns)
-        const double turn_speed = 1.0; // Maximum turn speed
-        const double turn_duration = 0.6; // Duration for each turn in seconds
-        
+        // alternating snake pattern
+        command_sequence_.push_back(Command(0.5, -1.0, PostureCmd::NONE, 0.3, "Initial turn for snake direction"));
+        const int num_turn_cycles = 20; // single turn cycle includes right and left turn
+        const double turn_speed = 1.0; // max turn speed
+        const double turn_duration = 0.6; // duration for each turn in seconds
         for (int i = 0; i < num_turn_cycles; i++) {
-            // Turn right while moving forward (snake pattern)
+            // turn right
             std::string right_desc = "Snake right (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
             command_sequence_.push_back(Command(0.5, turn_speed, PostureCmd::NONE, turn_duration, right_desc));
             
-            // Turn left while moving forward (snake pattern)
+            // turn left
             std::string left_desc = "Snake left (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
             command_sequence_.push_back(Command(0.5, -turn_speed, PostureCmd::NONE, turn_duration, left_desc));
         }
-        
-        // Final turn to adjust direction after snake pattern
-        command_sequence_.push_back(Command(0.5, 1.0, PostureCmd::NONE, 0.5, "Final turn after snake pattern"));
+        command_sequence_.push_back(Command(0.5, 1.0, PostureCmd::NONE, 0.3, "Final turn after snake pattern"));
         
         command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::NONE, 1.0, "Stop while crouched"));
         command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::STAND_DOWN, 2.0, "Stand down from crouch"));
-        
-        // You can add more complex sequences like:
-        // command_sequence_.push_back(Command(0.8, 0.0, PostureCmd::NONE, 3.0, "Fast forward"));
-        // command_sequence_.push_back(Command(0.0, 1.0, PostureCmd::NONE, 2.0, "Sharp right turn"));
-        // command_sequence_.push_back(Command(-0.3, 0.0, PostureCmd::CROUCH, 2.0, "Backward while crouching"));
-        // command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::NONE, 1.0, "Stop"));
         
         RCLCPP_INFO(this->get_logger(), "Command sequence initialized with %zu commands", command_sequence_.size());
     }
@@ -474,7 +455,7 @@ private:
     double stand_down_joint_pos[12] = {-0.005, 0.9, -2.44375, 0.005, 0.9, -2.44375,
                                        -0.005, 0.9, -2.44375, 0.005, 0.9, -2.44375};
     double crouch_joint_pos[12] = {-0.005, 1.3, -2.1, 0.005, 1.3, -2.1,
-                                    -0.005, 1.4, -2.1, 0.005, 1.4, -2.1};
+                                    -0.005, 1.45, -2.1, 0.005, 1.45, -2.1};
     bool stand_up = false;
     double dt = 0.002;
     double runing_time = 0.0;
