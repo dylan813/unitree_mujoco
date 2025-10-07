@@ -2,6 +2,7 @@
 
 refer to readme.md for installation
 
+sim
 ```bash
 source ~/unitree_ws/unitree_ros2/setup_local.sh
 ```
@@ -28,4 +29,16 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI='<CycloneDDS><Domain><General><Interfaces>
                             <NetworkInterface name="lo" priority="default" multicast="default" />
                         </Interfaces></General></Domain></CycloneDDS>'
+```
+
+real
+```bash
+source ~/unitree_ws/unitree_ros2/setup.sh
+```
+
+
+```bash
+cd ~/unitree_ws/unitree_mujoco/basic_nav
+export ROS_DOMAIN_ID=0
+./install/drive_go2/bin/drive_go2
 ```
