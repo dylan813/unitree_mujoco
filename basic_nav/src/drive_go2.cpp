@@ -120,6 +120,15 @@ private:
 
     void timer_callback()
     {
+        // Safety timeout: check total elapsed time since start
+        auto now = std::chrono::high_resolution_clock::now();
+        double total_elapsed = std::chrono::duration<double>(now - start_time_).count();
+        if (total_elapsed > max_runtime_seconds_) {
+            RCLCPP_ERROR(this->get_logger(), "Safety timeout reached (%.1fs). Stopping robot!", total_elapsed);
+            rclcpp::shutdown();
+            return;
+        }
+        
         // Update current command from sequence
         update_current_command();
         
@@ -145,8 +154,8 @@ private:
                     for (int i = 0; i < 12; i++) {
                         low_cmd.motor_cmd[i].q = phase * stand_up_joint_pos[i] + (1 - phase) * stand_down_joint_pos[i];
                         low_cmd.motor_cmd[i].dq = 0;
-                        low_cmd.motor_cmd[i].kp = phase * 50 + (1 - phase) * 20;
-                        low_cmd.motor_cmd[i].kd = 3.5;
+                        low_cmd.motor_cmd[i].kp = phase * 30 + (1 - phase) * 15;  // ramp up to standing stiffness
+                        low_cmd.motor_cmd[i].kd = 9.0;  // high damping throughout transition
                         low_cmd.motor_cmd[i].tau = 0;
                     }
                 } else {
@@ -165,18 +174,18 @@ private:
                     current_state = RobotState::TRANSITION_DOWN;
                     runing_time = 0.0;
                 } else {
-                    //hip motor (0,3,6,9) gains
-                    const float hip_kp = 100.0f;
-                    const float hip_kd = 3.5f;
-                    const float hip_tau = 0.0f;
-                    //thigh motor (1,4,7,10) gains
-                    const float thigh_kp = 80.0f;
-                    const float thigh_kd = 3.5f;
-                    const float thigh_tau = 0.0f;
-                    //calf motor (2,5,8,11) gains
-                    const float calf_kp  = 80.0f;
-                    const float calf_kd  = 3.5f;
-                    const float calf_tau  = 0.0f;
+                    // Very low gains for smooth, chatter-free operation - rely heavily on feedforward
+                    const float hip_kp = 15.0f;   // very low position stiffness
+                    const float hip_kd = 4.0f;    // very low damping
+                    const float hip_tau = 3.0f;   // increased feedforward
+                    
+                    const float thigh_kp = 15.0f; // very low position stiffness
+                    const float thigh_kd = 4.0f;  // very low damping
+                    const float thigh_tau = 6.0f; // increased feedforward - supports weight
+                    
+                    const float calf_kp  = 15.0f; // very low position stiffness
+                    const float calf_kd  = 4.0f;  // very low damping
+                    const float calf_tau  = 5.0f; // increased feedforward
 
                     for (int i = 0; i < 12; i++) {
                         float kp = 0.0f, kd = 0.0f, tau = 0.0f;
@@ -197,7 +206,7 @@ private:
                         low_cmd.motor_cmd[i].tau = tau;
                     }
 
-                    const double max_wheel_speed = 15.0; // rad/s
+                    const double max_wheel_speed = 50.0; // rad/s - high speed for wheels
                     double forward_speed = joystick_ly_ * max_wheel_speed;
                     double turning_speed = joystick_rx_ * max_wheel_speed;
                     double right_wheel_speed = forward_speed - turning_speed;
@@ -207,23 +216,59 @@ private:
 
                     const int right_wheel_motor_indices[] = {12, 14};
                     const int left_wheel_motor_indices[] = {13, 15};
-
+                    
+                    // Very gentle velocity control with torque limits to prevent tipping
+                    const double wheel_kd = 1.0;  // Reduced damping for gentler response
+                    const double feedforward_torque_gain = 0.2;  // Reduced feedforward
+                    const double max_wheel_torque = 15.0;  // Limit max torque to prevent tipping
+                    
                     for (int wheel_idx : right_wheel_motor_indices) {
-                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;
-                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;
-                        low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-                        low_cmd.motor_cmd[wheel_idx].kp = 0;
-                        low_cmd.motor_cmd[wheel_idx].kd = 0.5;
-                        low_cmd.motor_cmd[wheel_idx].tau = 0;
+                        double feedforward = feedforward_torque_gain * right_wheel_speed;
+                        double velocity_error = right_wheel_speed - actual_joint_velocities[wheel_idx];
+                        double feedback_torque = wheel_kd * velocity_error;
+                        double total_torque = feedforward + feedback_torque;
+                        
+                        // Clamp torque to safe limits
+                        total_torque = std::max(-max_wheel_torque, std::min(total_torque, max_wheel_torque));
+                        
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;  // torque mode
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;  // disable position control
+                        low_cmd.motor_cmd[wheel_idx].dq = VelStopF;  // disable internal velocity control
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;  // no position gain
+                        low_cmd.motor_cmd[wheel_idx].kd = 0;  // no internal damping
+                        low_cmd.motor_cmd[wheel_idx].tau = total_torque;  // limited torque command
                     }
 
                     for (int wheel_idx : left_wheel_motor_indices) {
-                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;
-                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;
-                        low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
-                        low_cmd.motor_cmd[wheel_idx].kp = 0;
-                        low_cmd.motor_cmd[wheel_idx].kd = 0.5;
-                        low_cmd.motor_cmd[wheel_idx].tau = 0;
+                        double feedforward = feedforward_torque_gain * left_wheel_speed;
+                        double velocity_error = left_wheel_speed - actual_joint_velocities[wheel_idx];
+                        double feedback_torque = wheel_kd * velocity_error;
+                        double total_torque = feedforward + feedback_torque;
+                        
+                        // Clamp torque to safe limits
+                        total_torque = std::max(-max_wheel_torque, std::min(total_torque, max_wheel_torque));
+                        
+                        low_cmd.motor_cmd[wheel_idx].mode = 0x01;  // torque mode
+                        low_cmd.motor_cmd[wheel_idx].q = PosStopF;  // disable position control
+                        low_cmd.motor_cmd[wheel_idx].dq = VelStopF;  // disable internal velocity control
+                        low_cmd.motor_cmd[wheel_idx].kp = 0;  // no position gain
+                        low_cmd.motor_cmd[wheel_idx].kd = 0;  // no internal damping
+                        low_cmd.motor_cmd[wheel_idx].tau = total_torque;  // limited torque command
+                    }
+                    
+                    // Debug: log what we're sending to wheels
+                    static int log_counter = 0;
+                    if (log_counter++ % 50 == 0) {  // Log every 50 cycles (~0.1 seconds) for debugging
+                        double r_ff = feedforward_torque_gain * right_wheel_speed;
+                        double l_ff = feedforward_torque_gain * left_wheel_speed;
+                        double r_vel_error = right_wheel_speed - actual_joint_velocities[12];
+                        double l_vel_error = left_wheel_speed - actual_joint_velocities[13];
+                        RCLCPP_INFO(this->get_logger(), "WHEELS: joy_ly=%.2f, joy_rx=%.2f -> R_des=%.1f, L_des=%.1f rad/s", 
+                                    joystick_ly_, joystick_rx_, right_wheel_speed, left_wheel_speed);
+                        RCLCPP_INFO(this->get_logger(), "Motor 12 (R): FF=%.1f Nm, vel_err=%.1f, actual=%.1f rad/s", 
+                                    r_ff, r_vel_error, actual_joint_velocities[12]);
+                        RCLCPP_INFO(this->get_logger(), "Motor 13 (L): FF=%.1f Nm, vel_err=%.1f, actual=%.1f rad/s", 
+                                    l_ff, l_vel_error, actual_joint_velocities[13]);
                     }
                 }
                 break;
@@ -238,13 +283,13 @@ private:
                     
                     for (int i = 0; i < 12; i++) {
                         double* start_pos = transitioning_to_crouch_from_stand_down ? stand_down_joint_pos : stand_up_joint_pos;
-                        double start_kp = transitioning_to_crouch_from_stand_down ? 12.0 : 35.0;
+                        double start_kp = transitioning_to_crouch_from_stand_down ? 15.0 : 30.0;  // transition from stand or stand_down
                         
                         low_cmd.motor_cmd[i].q = (1 - phase) * start_pos[i] + phase * crouch_joint_pos[i];
                         low_cmd.motor_cmd[i].dq = 0;
-                        double end_kp = transitioning_to_crouch_from_stand_down ? 18.0 : 30.0;
+                        double end_kp = transitioning_to_crouch_from_stand_down ? 20.0 : 20.0;  // crouch needs moderate stiffness
                         low_cmd.motor_cmd[i].kp = (1 - phase) * start_kp + phase * end_kp;
-                        low_cmd.motor_cmd[i].kd = 2.5;
+                        low_cmd.motor_cmd[i].kd = 9.0;  // high damping for stability
                         low_cmd.motor_cmd[i].tau = 0;
                     }
                 } else {
@@ -255,18 +300,18 @@ private:
             }
 
             case RobotState::CROUCH: {
-                //hip motor (0,3,6,9) gains for crouch - lower for smoother transition
-                const float crouch_hip_kp = 25.0f;
-                const float crouch_hip_kd = 2.5f;
-                const float crouch_hip_tau = 0.0f;
-                //thigh motor (1,4,7,10) gains for crouch - lower for smoother transition
-                const float crouch_thigh_kp = 20.0f;
-                const float crouch_thigh_kd = 2.5f;
-                const float crouch_thigh_tau = 0.0f;
-                //calf motor (2,5,8,11) gains for crouch - lower for smoother transition
-                const float crouch_calf_kp  = 20.0f;
-                const float crouch_calf_kd  = 2.5f;
-                const float crouch_calf_tau  = 0.0f;
+                //hip motor (0,3,6,9) gains for crouch - moderate stiffness for low posture
+                const float crouch_hip_kp = 20.0f;   // moderate stiffness for crouch position
+                const float crouch_hip_kd = 9.0f;    // high damping for stability
+                const float crouch_hip_tau = 0.0f;   // pure PD control (no feedforward)
+                //thigh motor (1,4,7,10) gains for crouch - moderate stiffness for low posture
+                const float crouch_thigh_kp = 20.0f; // moderate stiffness for crouch position
+                const float crouch_thigh_kd = 9.0f;  // high damping for stability
+                const float crouch_thigh_tau = 0.0f; // pure PD control (no feedforward)
+                //calf motor (2,5,8,11) gains for crouch - moderate stiffness for low posture
+                const float crouch_calf_kp  = 20.0f; // moderate stiffness for crouch position
+                const float crouch_calf_kd  = 9.0f;  // high damping for stability
+                const float crouch_calf_tau  = 0.0f; // pure PD control (no feedforward)
 
                 for (int i = 0; i < 12; i++) {
                     float kp = 0.0f, kd = 0.0f, tau = 0.0f;
@@ -288,7 +333,7 @@ private:
                 }
 
                 // Wheel control for crouch state
-                const double max_wheel_speed = 15.0; // rad/s
+                const double max_wheel_speed = 50.0; // rad/s - high speed for wheels
                 double forward_speed = joystick_ly_ * max_wheel_speed;
                 double turning_speed = joystick_rx_ * max_wheel_speed;
                 double right_wheel_speed = forward_speed - turning_speed;
@@ -298,23 +343,44 @@ private:
 
                 const int right_wheel_motor_indices[] = {12, 14};
                 const int left_wheel_motor_indices[] = {13, 15};
-
+                
+                // Very gentle velocity control with torque limits to prevent tipping
+                const double wheel_kd = 1.0;  // Reduced damping for gentler response
+                const double feedforward_torque_gain = 0.2;  // Reduced feedforward
+                const double max_wheel_torque = 15.0;  // Limit max torque to prevent tipping
+                
                 for (int wheel_idx : right_wheel_motor_indices) {
-                    low_cmd.motor_cmd[wheel_idx].mode = 0x01;
-                    low_cmd.motor_cmd[wheel_idx].q = PosStopF;
-                    low_cmd.motor_cmd[wheel_idx].dq = right_wheel_speed;
-                    low_cmd.motor_cmd[wheel_idx].kp = 0;
-                    low_cmd.motor_cmd[wheel_idx].kd = 0.5;
-                    low_cmd.motor_cmd[wheel_idx].tau = 0;
+                    double feedforward = feedforward_torque_gain * right_wheel_speed;
+                    double velocity_error = right_wheel_speed - actual_joint_velocities[wheel_idx];
+                    double feedback_torque = wheel_kd * velocity_error;
+                    double total_torque = feedforward + feedback_torque;
+                    
+                    // Clamp torque to safe limits
+                    total_torque = std::max(-max_wheel_torque, std::min(total_torque, max_wheel_torque));
+                    
+                    low_cmd.motor_cmd[wheel_idx].mode = 0x01;  // torque mode
+                    low_cmd.motor_cmd[wheel_idx].q = PosStopF;  // disable position control
+                    low_cmd.motor_cmd[wheel_idx].dq = VelStopF;  // disable internal velocity control
+                    low_cmd.motor_cmd[wheel_idx].kp = 0;  // no position gain
+                    low_cmd.motor_cmd[wheel_idx].kd = 0;  // no internal damping
+                    low_cmd.motor_cmd[wheel_idx].tau = total_torque;  // limited torque command
                 }
 
                 for (int wheel_idx : left_wheel_motor_indices) {
-                    low_cmd.motor_cmd[wheel_idx].mode = 0x01;
-                    low_cmd.motor_cmd[wheel_idx].q = PosStopF;
-                    low_cmd.motor_cmd[wheel_idx].dq = left_wheel_speed;
-                    low_cmd.motor_cmd[wheel_idx].kp = 0;
-                    low_cmd.motor_cmd[wheel_idx].kd = 0.5;
-                    low_cmd.motor_cmd[wheel_idx].tau = 0;
+                    double feedforward = feedforward_torque_gain * left_wheel_speed;
+                    double velocity_error = left_wheel_speed - actual_joint_velocities[wheel_idx];
+                    double feedback_torque = wheel_kd * velocity_error;
+                    double total_torque = feedforward + feedback_torque;
+                    
+                    // Clamp torque to safe limits
+                    total_torque = std::max(-max_wheel_torque, std::min(total_torque, max_wheel_torque));
+                    
+                    low_cmd.motor_cmd[wheel_idx].mode = 0x01;  // torque mode
+                    low_cmd.motor_cmd[wheel_idx].q = PosStopF;  // disable position control
+                    low_cmd.motor_cmd[wheel_idx].dq = VelStopF;  // disable internal velocity control
+                    low_cmd.motor_cmd[wheel_idx].kp = 0;  // no position gain
+                    low_cmd.motor_cmd[wheel_idx].kd = 0;  // no internal damping
+                    low_cmd.motor_cmd[wheel_idx].tau = total_torque;  // limited torque command
                 }
                 break;
             }
@@ -326,12 +392,12 @@ private:
                     for (int i = 0; i < 12; i++) {
                         // Choose starting position based on where we're transitioning from
                         double* start_pos = transitioning_down_from_crouch ? crouch_joint_pos : stand_up_joint_pos;
-                        double start_kp = transitioning_down_from_crouch ? 30.0 : 50.0; // Different gains for crouch vs stand
+                        double start_kp = transitioning_down_from_crouch ? 20.0 : 30.0; // transition from crouch or stand
                         
                         low_cmd.motor_cmd[i].q = (1 - phase) * start_pos[i] + phase * stand_down_joint_pos[i];
                         low_cmd.motor_cmd[i].dq = 0;
-                        low_cmd.motor_cmd[i].kp = (1 - phase) * start_kp + phase * 20;
-                        low_cmd.motor_cmd[i].kd = 3.5;
+                        low_cmd.motor_cmd[i].kp = (1 - phase) * start_kp + phase * 15;  // ramp down to stand_down stiffness
+                        low_cmd.motor_cmd[i].kd = 9.0;  // high damping for stability
                         low_cmd.motor_cmd[i].tau = 0;
                     }
                 } else {
@@ -356,28 +422,37 @@ private:
         
         command_sequence_.clear();
         
-        // Custom army crawl sequence
-        command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::CROUCH, 6.0, "Crouch down very slowly and safely"));
-        command_sequence_.push_back(Command(0.4, 0.0, PostureCmd::NONE, 1.5, "Move forward while crouching"));
+        // Stand up first so robot can move
+        command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::STAND_UP, 2.0, "Stand up"));
         
-        // alternating snake pattern
-        command_sequence_.push_back(Command(0.5, -1.0, PostureCmd::NONE, 0.3, "Initial turn for snake direction"));
-        const int num_turn_cycles = 20; // single turn cycle includes right and left turn
-        const double turn_speed = 1.0; // max turn speed
-        const double turn_duration = 0.6; // duration for each turn in seconds
-        for (int i = 0; i < num_turn_cycles; i++) {
-            // turn right
-            std::string right_desc = "Snake right (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
-            command_sequence_.push_back(Command(0.5, turn_speed, PostureCmd::NONE, turn_duration, right_desc));
+        // Repeat snake pattern multiple times
+        const int num_snake_repetitions = 8;  // How many times to repeat the entire snake pattern
+        const int num_turn_cycles = 5; // single turn cycle includes right and left turn
+        const double turn_speed = 0.1; // max turn speed
+        const double turn_duration = 0.8; // duration for each turn in seconds
+        
+        for (int rep = 0; rep < num_snake_repetitions; rep++) {
+            // Initial turn for this snake sequence
+            std::string init_desc = "Snake rep " + std::to_string(rep + 1) + "/" + std::to_string(num_snake_repetitions) + " - initial turn";
+            command_sequence_.push_back(Command(0.1, -0.1, PostureCmd::NONE, 0.4, init_desc));
             
-            // turn left
-            std::string left_desc = "Snake left (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
-            command_sequence_.push_back(Command(0.5, -turn_speed, PostureCmd::NONE, turn_duration, left_desc));
+            // Alternating snake pattern
+            for (int i = 0; i < num_turn_cycles; i++) {
+                // turn right
+                std::string right_desc = "Rep " + std::to_string(rep + 1) + " - Snake right (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
+                command_sequence_.push_back(Command(0.1, turn_speed, PostureCmd::NONE, turn_duration, right_desc));
+                
+                // turn left
+                std::string left_desc = "Rep " + std::to_string(rep + 1) + " - Snake left (" + std::to_string(i + 1) + "/" + std::to_string(num_turn_cycles) + ")";
+                command_sequence_.push_back(Command(0.1, -turn_speed, PostureCmd::NONE, turn_duration, left_desc));
+            }
+            
+            // Final turn for this snake sequence
+            std::string final_desc = "Snake rep " + std::to_string(rep + 1) + "/" + std::to_string(num_snake_repetitions) + " - final turn";
+            command_sequence_.push_back(Command(0.1, 0.1, PostureCmd::NONE, 0.4, final_desc));
+
+            command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::NONE, 3.0, "Stop while standing"));
         }
-        command_sequence_.push_back(Command(0.5, 1.0, PostureCmd::NONE, 0.3, "Final turn after snake pattern"));
-        
-        command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::NONE, 1.0, "Stop while crouched"));
-        command_sequence_.push_back(Command(0.0, 0.0, PostureCmd::STAND_DOWN, 2.0, "Stand down from crouch"));
         
         RCLCPP_INFO(this->get_logger(), "Command sequence initialized with %zu commands", command_sequence_.size());
     }
@@ -408,7 +483,9 @@ private:
                     RCLCPP_INFO(this->get_logger(), "Movement: forward=%.2f, turn=%.2f", cmd.forward_speed, cmd.turn_speed);
                 }
             } else {
-                RCLCPP_INFO(this->get_logger(), "Command sequence completed!");
+                RCLCPP_INFO(this->get_logger(), "Command sequence completed! Stopping robot...");
+                // Stop the node to ensure robot doesn't continue running
+                rclcpp::shutdown();
             }
         }
     }
@@ -440,6 +517,7 @@ private:
     size_t current_command_index_;
     std::chrono::high_resolution_clock::time_point start_time_;
     std::chrono::high_resolution_clock::time_point command_start_time_;
+    const double max_runtime_seconds_ = 240.0;  // Safety timeout: stop after 60 seconds
 
     // Current joystick values (now controlled by command sequence)
     double joystick_ly_ = 0.0;
